@@ -1,0 +1,68 @@
+services:
+  orderer.example.com:
+    image: hyperledger/fabric-orderer:2.2
+    container_name: orderer.example.com
+    environment:
+      - ORDERER_GENERAL_LOGLEVEL=info
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_GENESISFILE=/etc/hyperledger/configtx/genesis.block
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/etc/hyperledger/msp/orderer
+      - ORDERER_GENERAL_TLS_ENABLED=false
+    volumes:
+      - orderer-data:/var/hyperledger/production/orderer
+      - ./config/orderer/genesis.block:/etc/hyperledger/configtx/genesis.block
+
+  peer0.org1.example.com:
+    image: hyperledger/fabric-peer:2.2
+    container_name: peer0.org1.example.com
+    environment:
+      - CORE_PEER_ID=peer0.org1.example.com
+      - CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+      - CORE_PEER_CHAINCODEADDRESS=peer0.org1.example.com:7052
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.org1.example.com:7051
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.org1.example.com:7051
+      - CORE_PEER_LOCALMSPID=Org1MSP
+      - CORE_PEER_TLS_ENABLED=false
+    volumes:
+      - peer0-data:/var/hyperledger/production/peer
+      - ./config/peer/crypto-config:/etc/hyperledger/msp
+
+  couchdb:
+    image: couchdb:3.1
+    container_name: couchdb
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=password
+    ports:
+      - "5984:5984"
+
+  chaincode:
+    build:
+      context: ./chaincode/hospital
+      dockerfile: Dockerfile
+    container_name: hospital-chaincode
+    environment:
+      - CORE_CHAINCODE_ID_NAME=hospital:0
+    depends_on:
+      - peer0.org1.example.com
+    command: /bin/sh -c "sleep 10 && peer lifecycle chaincode install /opt/hyperledger/chaincode/hospital.tar.gz"
+    volumes:
+      - ./chaincode/hospital:/opt/hyperledger/chaincode/hospital
+    ports:
+      - "7052:7052"
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: hospital-api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - couchdb
+
+volumes:
+  orderer-data:
+  peer0-data:
